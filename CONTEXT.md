@@ -75,6 +75,50 @@ The level a fact is remembered at: the person, the channel, or the guild.
 A fact defaults to the person who said it, so the private level is the default and the shared levels are deliberate.
 _Avoid_: namespace, partition, tenant, context
 
+**Provenance**:
+The pointer from a fact to the entry it was derived from, written by code and never supplied by a model.
+It is what makes a wrong fact auditable and a deletion precise.
+_Avoid_: source, citation, reference, lineage
+
+**Brief**:
+A short reconciled account of what a scope is currently doing: active task, open loops, commitments.
+Held per scope and replaced wholesale, unlike a digest, which is computed once from the entries it replaces and never rewritten.
+_Avoid_: summary, status, state, notes
+
+**Playbook**:
+A named procedure the agent can follow, held as prose so that reading the body is running it.
+_Avoid_: skill, recipe, workflow, routine
+
+**Index**:
+The rendering of what memory holds that is always present in a turn, as opposed to what is read on demand.
+_Avoid_: manifest, catalogue, listing, table of contents
+
+**Working set**:
+Everything assembled for one turn, in fixed order, computed rather than stored.
+_Avoid_: prompt, context, payload
+
+**Operation**:
+One proposed change to a reconciled layer: add, update, invalidate, or nothing.
+Proposed by a pass and applied by code, so a proposal is never a write.
+_Avoid_: mutation, edit, action, command
+
+**Reconciliation**:
+The pass that reads what happened and proposes operations against what is currently believed.
+_Avoid_: consolidation, reflection, review, learning
+
+**Staleness sweep**:
+The deterministic pass that drops a fact out of the index when nothing has re-confirmed it for long enough.
+Uses no model, which is why it is the one pass that cannot forget.
+_Avoid_: decay, expiry, eviction, garbage collection
+
+**Archive**:
+Where a fact goes when it leaves the index: still searchable, never rendered into a turn.
+_Avoid_: cold storage, trash, attic
+
+**Quarantine**:
+Where a file goes when it fails validation, set aside so one malformed file cannot take down a session.
+_Avoid_: corrupt, rejected, dead letter
+
 ### Model work
 
 **Provider**:
