@@ -73,14 +73,22 @@ Read the issue via the MCP server, including its comments.
 Used by `/wayfinder`.
 The **map** is a single issue with **child** issues as tickets.
 
-The upstream skill template drives sub-issues and issue dependencies through raw `gh api` REST calls.
-Those raw endpoints have no `gh` fallback here, and the MCP server is not known to expose equivalents.
-**Use the body-text conventions below**, which the upstream template already documents as its fallback.
-If the MCP server turns out to expose sub-issue or dependency tools, prefer them and update this section.
+The MCP server **does** expose native sub-issues via `sub_issue_write` (`method: "add"`, parent `issue_number`, child `sub_issue_id`).
+Note the child is identified by its **node id**, not its issue number — the id returned when the issue was created.
+Prefer this over the body-text task-list fallback: it renders hierarchy and a completion percentage in GitHub's own UI.
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body.
-- **Child ticket**: an issue with `Part of #<map>` at the top of its body, and an entry in a task list in the map body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every issue it lists is closed.
-- **Frontier query**: list the map's open children from its task list, drop any with an open blocker or an assignee; first in map order wins.
+The server exposes **no tool for writing issue dependencies**.
+Reads confirm the field exists (`issue_read` returns `issue_dependencies_summary`), but nothing writes it, and the raw REST endpoint is unreachable with `gh` banned.
+So blocking stays a body-text convention.
+
+- **Map**: a single issue labelled `wayfinder:map`, holding the Destination / Notes / Decisions-so-far / Fog / Out-of-scope body.
+- **Child ticket**: created as an ordinary issue, then attached with `sub_issue_write`. Keep `Part of #<map>` as the first body line too — it survives if the hierarchy is ever lost, and it makes the parent visible in plain text. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
+- **Blocking**: a `Blocked by: #<n>, #<n>` line near the top of the child body. A ticket is unblocked when every issue it lists is closed. There is no native write path — do not spend time looking for one.
+- **Frontier query**: read the map's children with `issue_read` (`method: "get_sub_issues"`), keep the open ones, then drop any whose `Blocked by:` line names an open issue and any with an assignee. First in child order wins.
+
+`sub_issue_write` returns the **entire parent issue** on every call, so wiring N children costs N full map bodies in context.
+Create all the tickets first, then attach them — and expect the noise.
+
+`issue_write` auto-creates labels that do not exist yet, so `wayfinder:*` labels need no separate setup step.
 - **Claim**: assign the issue to the current user — the session's first write.
 - **Resolve**: comment the answer on the issue, close it, then append a context pointer (gist + link) to the map's Decisions-so-far.
