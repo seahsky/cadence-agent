@@ -1,0 +1,11 @@
+{
+  "env": {
+    "ENABLE_TOOL_SEARCH": "true"
+  },
+  "permissions": {
+    "deny": [
+      "Bash(gh)",
+      "Bash(gh:*)"
+    ]
+  }
+}

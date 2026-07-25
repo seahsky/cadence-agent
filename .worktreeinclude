@@ -1,0 +1,4 @@
+# Gitignored files copied into every worktree Claude Code creates.
+# Uses .gitignore syntax; only files that are also gitignored are copied.
+# Carries GITHUB_MCP_PAT so the github MCP server authenticates inside worktrees.
+.claude/settings.local.json

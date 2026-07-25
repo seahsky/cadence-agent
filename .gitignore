@@ -1,0 +1,8 @@
+# Local Claude Code settings — holds the GitHub fine-grained PAT, never commit
+.claude/settings.local.json
+
+# Worktrees Claude Code creates for parallel sessions
+.claude/worktrees/
+
+.env
+.env.local
