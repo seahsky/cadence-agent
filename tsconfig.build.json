@@ -1,0 +1,6 @@
+{
+  // Build config. The base tsconfig deliberately includes tests so `pnpm typecheck` covers
+  // them; this one excludes them so they never reach dist/.
+  "extends": "./tsconfig.json",
+  "exclude": ["dist", "node_modules", "**/*.test.ts"]
+}
