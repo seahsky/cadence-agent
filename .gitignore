@@ -6,3 +6,16 @@
 
 .env
 .env.local
+
+# Build output
+dist/
+
+node_modules/
+
+# Anything cadence persists at runtime — sessions, memory, logs
+data/
+
+# Test and tooling caches
+coverage/
+*.tsbuildinfo
+.vitest/
