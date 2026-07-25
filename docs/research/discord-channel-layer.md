@@ -177,6 +177,18 @@ So a slash command wrapping a model call must defer immediately and then edit, a
 
 On "app-DM": [install contexts](https://docs.discord.com/developers/resources/application#application-object-application-integration-types) are `GUILD_INSTALL = 0` and `USER_INSTALL = 1`. A user install lets the app's *commands* travel with the user anywhere, including DMs with other people. It is not a substitute for a bot user receiving DMs, and it does not grant free-text reading. For a private single-operator agent, `GUILD_INSTALL` plus a bot user is the correct and simpler shape. Keep `USER_INSTALL` in mind only if the agent later needs to be summoned into servers it is not a member of.
 
+### 4a. Message edits
+
+Added 2026-07-25, after the grilling on #9 made edits load-bearing: an edit is a fork gesture, so `messageUpdate` moved from a nicety to a primary input.
+Both claims below are **[uncertain]** — they are well-known discord.js behaviour but were not confirmed against a primary source in this pass, and both are listed again under [Unverified](#unverified).
+
+- **`messageUpdate` fires on changes that are not edits.** The common case is a message containing a URL: Discord attaches the unfurled embed some seconds after the message was sent and emits an update with `content` unchanged. Any handler that treats every `messageUpdate` as a user edit will act on these. Compare normalised content and ignore no-ops.
+- **`Partials.Message` is needed to receive an edit to an uncached message.** Same class of gotcha as `Partials.Channel` for DMs ([3](#3-dms)): without it the event does not fire at all for messages the client has not cached, which after a restart is every message. `oldMessage` will also be a partial with no usable previous content, so compare against cadence's own stored entry rather than against `oldMessage`.
+
+Confirmed elsewhere in this document and relevant here: `message.id` is **stable forever** and is unchanged by an edit ([12](#12-stable-identifiers-for-scoping)), so an edited message remains a durable anchor.
+
+Editing a message in a guild channel is subject to the same `MESSAGE_CONTENT` rules as sending one ([2](#2-gateway-intents)), so the edited content is exempt only where the original was.
+
 ---
 
 ## Getting replies out
@@ -583,6 +595,8 @@ Everything below could not be confirmed against a primary source. It is flagged 
 - **Whether a shared guild is strictly required for a bot to DM a user.** Not stated in the developer docs. Discord support material and community discussion both indicate a bot cannot DM a user with whom it shares no server the user accepts DMs from, and there are standing feature requests to change this — which implies the restriction is real. Moot for this project, since setup step A establishes a shared guild.
 - **Markdown features that do not render.** Tables, images (`![alt](url)`), horizontal rules, and headings above level 3 are absent from both the `@discordjs/formatters` helper set and the `HeadingLevel` enum (which stops at `Three`). That is strong circumstantial evidence but not an explicit statement of non-support. The canonical human-facing reference is Discord's "Markdown Text 101" support article, which returned HTTP 403 to automated fetches; the developer docs contain no markdown page at all (only the mention/formatting table under API Reference).
 - **Components V2 total character limit.** The reference documents "up to 40 total components" per message and gives no character limit for a Text Display `content` field. A 4000-character aggregate is often cited; not confirmed.
+- **`messageUpdate` firing on link-unfurl embeds** with `content` unchanged. Stated in [4a](#4a-message-edits) from well-known discord.js behaviour, not confirmed against Discord's gateway event documentation in this pass. It is a correctness requirement for the edit-as-fork design, so confirm it before implementing.
+- **`Partials.Message` being required to receive `messageUpdate` for an uncached message.** Same status: consistent with the documented `Partials.Channel` behaviour for DMs, not confirmed from the discord.js partials guide directly.
 - **Developer Portal UI labels** in the setup checklist. The Bot page's "Privileged Gateway Intents" section name is quoted from the developer docs and is reliable. Button labels such as "Reset Token", "New Application", and the Installation page layout are from the portal as it has recently stood; Discord changes this UI without notice. The OAuth2 URL in step 12 is built from the documented parameter set and is the more durable path.
 
 ---
