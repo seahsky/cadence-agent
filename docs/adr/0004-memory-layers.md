@@ -75,6 +75,10 @@ Above it, attention degrades and retrieval starts winning; a cap is also the onl
 **Eviction is deterministic: oldest `asof` first.**
 What leaves the rendered block goes to an archive that stays searchable and is never injected.
 
+> **Amended by [ADR 0005](0005-storage.md).**
+> The archive is not a location.
+> Because eviction is recomputed whenever memory changes, a fact crowded out today has to be able to come back, so nothing is moved: the archive is the set of live facts the render did not select.
+
 Two rules that fix named defects:
 
 - **Re-render when memory changes, not once at session start.** Hermes freezes long-term memory as a load-time snapshot, so a fact corrected mid-session is invisible for the rest of it: the agent agrees with you, saves it, and violates it four turns later. Changes are rare, so a cache write on change is cheap.
@@ -104,6 +108,11 @@ Its input is small: the current brief and the turns since it was last written.
 
 **The staleness sweep uses no model.**
 Every other path to changing memory routes through a model decision, which is the measurably fragile step, so the one producer that cannot forget or hallucinate is worth having.
+
+> **Amended by [ADR 0005](0005-storage.md).**
+> The sweep produces no operations.
+> The 90-day rule is a predicate over `asof`, evaluated by the render, so the sweep observes transitions and reports them to the operator channel rather than writing.
+> It remains the one pass that cannot forget; it is not a writer.
 
 **An explicit request writes immediately** and re-renders, so it is in context on the next turn.
 It may emit all four operations, because the owner is present to see the result, which is the safest moment a write ever happens.
