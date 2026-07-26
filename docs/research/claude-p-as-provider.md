@@ -300,17 +300,102 @@ The docs then include a critical note:
 
 ---
 
+### 12. Measured: what a background pass costs against the subscription windows
+
+Measured 2026-07-26 against CLI 2.1.220 on a Max plan, resolving #15.
+Every number in this section is from running, not from documentation.
+
+#### The instrument, because `rate_limit_event` cannot answer this
+
+`rate_limit_info` carries no quantity.
+Its fields are `status`, `resetsAt`, `rateLimitType`, `overageStatus`, `overageResetsAt` and `isUsingOverage`: flags, an enum and two timestamps.
+Subtracting two of them yields nothing, so the "capture before and after and record the delta" method #15 originally proposed cannot produce a cost.
+
+The quantity lives at **`https://api.anthropic.com/api/oauth/usage`**, the endpoint Claude Code's own statusline polls.
+It returns `five_hour.utilization` and `seven_day.utilization` as percentages, plus an `extra_usage` block and a `limits` array.
+Because it reports a percentage, no dollars-per-window conversion is ever needed: a pass costs N points directly.
+
+Two properties matter for the design, not just the experiment.
+**`utilization` is typed as a float but every observed value was whole**, so effective resolution is one percentage point.
+**The endpoint throttles under rapid polling**: reads succeeded for the first few calls of a 20-run batch and then returned nothing for the remainder, recovering minutes later.
+Anything reading it at runtime must poll on an interval and cache, the way the statusline does at 60 seconds, and must not call it per invocation.
+
+**There are two windows, not one.**
+`seven_day` sits beside `five_hour` and nothing in the prior design mentioned it.
+
+#### The floor dominates, and two flags remove it
+
+Billable input tokens for the prompt "reply with the word ok", carrying no content at all:
+
+| configuration | Sonnet 5 | Haiku 4.5 |
+|---|---|---|
+| as-is | 10,634 | 7,537 |
+| `--system-prompt` replaced | 2,062 | 1,297 |
+| `--system-prompt` + `--setting-sources ""` | **218** | **189** |
+
+Forty-nine times, on Sonnet, before a byte of transcript.
+Two independent layers: roughly 8,500 tokens of Claude Code's base system prompt, then roughly 1,850 more of settings-sourced content, which is the operator's `~/.claude/CLAUDE.md` riding along.
+
+**`--system-prompt` does not suppress the settings layer.**
+Both flags are required.
+`--bare` also removes both and must never be used: its own help states auth becomes strictly `ANTHROPIC_API_KEY` or `apiKeyHelper`, with OAuth and keychain never read, which silently moves every background pass onto per-token billing.
+
+#### Per-pass cost
+
+Haiku 4.5, `--system-prompt` + `--setting-sources ""`, boundary transcripts of roughly 2,000 tokens, means over 20 runs each:
+
+| pass | input tok | output tok | notional | wall p50 | wall max |
+|---|---|---|---|---|---|
+| digest | 2,356 | 800 | $0.0064 | 12.7s | 20.6s |
+| reconcile | 2,859 | 2,644 | $0.0161 | 30.4s | 61.0s |
+| brief | 2,452 | 4,050 | $0.0227 | 45.1s | 70.5s |
+| nightly sweep | 7,429 | 1,090 | $0.0203 | 16.7s | — |
+
+Boundary triple: **$0.0451 notional**.
+Marginal input rate, fitted across a 12,500-token spread: **$2.19 per Mtok on Haiku, $6.22 per Mtok on Sonnet**.
+
+**The brief pass is the most expensive of the three despite having the smallest input**, because it is rewritten wholesale and its cost is carried by output, not input.
+ADR 0004 describes its input as small, which is true and misleading.
+It is also the pass that fires most often, since it cannot wait for a boundary.
+
+#### A full day of background load
+
+20 boundaries and one nightly sweep, 61 invocations, run as one uninterrupted batch:
+
+- **$0.9230 notional**, 30.4 minutes of wall time, zero failures.
+- **Five-hour window: 4% to 6%.** Two points, and an unknown fraction of that is the operator's own concurrent session, so the true figure is one to two points.
+- **Seven-day window: 1% to 1%.** No measurable movement at all.
+- **Overage spend: zero.** `spend.used.amount_minor` stayed at 0 throughout.
+
+A real day spreads this across roughly five consecutive five-hour windows rather than compressing it into one, so per-window cost in production is well under one point.
+
+**The affordability claim holds, with a correction.**
+The prediction that the seven-day cap would be the binding constraint on sustained background work is **not supported**: at this load it did not move at all, while the five-hour window at least registered.
+Neither is threatened.
+Background consolidation on Haiku is not merely affordable, it is below the resolution of the instrument.
+
+#### Incidental findings from the same runs
+
+- **Thinking deltas are emitted.** `content_block_start/thinking`, `thinking_delta` and `signature_delta` all appear under `--include-partial-messages`, in 61 of 61 runs. `TurnEvent.thinking_delta` is reachable from this provider and is not an OpenRouter-only variant.
+- **`--no-session-persistence` is genuinely clean.** Across 20 runs carrying synthetic private conversation, `~/.claude/history.jsonl` came out byte-identical and the file counts under `projects/` and `sessions/` were unchanged. Transcript content does not reach disk.
+- **The prompt cache works against this usage pattern, and config C sidesteps it.** Sonnet caches from a 1,024-token prefix, so a one-shot process pays the 1.25x cache-write premium for an entry it will never read; two identical digest runs cost $0.0411 and $0.0165 depending on which side of the cache they landed. Haiku's minimum cacheable prefix is 4,096 tokens, so with the floor removed only 1 of 61 day-simulation runs wrote a cache entry at all.
+- **`--effort low` removes thinking on Sonnet**, 1,025 output tokens down to 491 with zero thinking events. Haiku barely responds to it.
+- **Concurrency needs no separate experiment.** A day of load is 30 minutes of serialized subprocess time, so a global semaphore of 1 has roughly 48x headroom at 20 boundaries per day.
+- **The 120s timeout has thinner margin than it looks.** Observed maximum was 70.5s, on the brief pass, against a 120s limit. That is 1.7x, not the large margin a round number suggests.
+
+---
+
 ## Unverified / Needs Testing
 
-1. **Rate limit denial handling:** What is the exact error message/structure when CLI hits rate limits (`status: "denied"`)? Does it retry, backoff, or fail fast?
-2. **Concurrency limits on subscriptions:** How many parallel `claude -p` processes can run simultaneously without hitting rate limits?
-3. **Session recovery after reboot:** If `~/.claude/sessions/` is preserved across restarts, do sessions resume reliably after a server restart?
-4. **External session state management:** Can `--no-session-persistence` + explicit `--session-id <uuid>` be used to have an external orchestrator own session state without relying on `~/.claude/sessions/`?
-5. **Multi-turn conversation handling:** What is the exact JSON schema for `--input-format=stream-json` user messages, and how does Claude handle multiple turns in one invocation?
-6. **Overage billing semantics:** What is the difference between `overageStatus` and `isUsingOverage` in the rate_limit_event? Does "overage" mean additional cost, or just tier progression?
-7. **Cost accounting interpretation:** Is the per-invocation `costUSD` field real billing, or just internal accounting for rate-limit tracking? Does a subscription plan absorb these costs?
-8. **Cross-user session isolation:** If cadence-agent runs as a daemon handling multiple Discord users, can sessions safely resume across users without cross-contamination of history or context?
-9. **SDK as subprocess vs native:** Does the Agent SDK spawn the bundled CLI as a subprocess (like `claude -p`), or does it embed/link the CLI code directly?
+1. **Rate limit denial handling:** What `status: "denied"` looks like on the wire is still unobserved, and it is the trigger `cause: "quota"` failover depends on. Deliberately provoking it was **rejected**: `extra_usage.is_enabled` is true with a $200 monthly cap, so burning to denial passes through paid credits rather than stopping at the wall. Capture it opportunistically the next time the window is exhausted in ordinary use.
+2. **Whether `utilization` ever reports a fractional value**, or is always rounded server-side to whole percentage points. Every observed value was whole. This sets the floor on how small a change the runtime headroom check can detect.
+3. **Session recovery after reboot:** moot for cadence, which never resumes, but unverified in general.
+4. **Multi-turn conversation handling:** exact JSON schema for `--input-format=stream-json` user messages. Not on cadence's path, since ADR 0003 fixed one-shot processes.
+5. **Overage billing semantics:** the difference between `overageStatus` and `isUsingOverage`. `spend.used.amount_minor` from the usage endpoint is the field that actually tracks credit consumption, and it stayed at zero throughout.
+6. **Cross-user session isolation:** not applicable while sessions are never persisted or resumed.
+7. **SDK as subprocess vs native:** settled negatively by #14 for cadence's purposes; the SDK forces API-key billing regardless.
+
+**Resolved by §12 and struck from this list:** concurrency limits, external session state management via `--no-session-persistence`, and the cost-accounting interpretation.
 
 ---
 
