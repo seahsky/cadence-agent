@@ -107,12 +107,13 @@ The pass that reads what happened and proposes operations against what is curren
 _Avoid_: consolidation, reflection, review, learning
 
 **Staleness sweep**:
-The deterministic pass that drops a fact out of the index when nothing has re-confirmed it for long enough.
-Uses no model, which is why it is the one pass that cannot forget.
+The deterministic pass that reports which facts have gone unconfirmed long enough to fall out of the index.
+Uses no model, which is why it is the one pass that cannot forget, and writes nothing, because ageing out is a property of the fact rather than a change made to it.
 _Avoid_: decay, expiry, eviction, garbage collection
 
 **Archive**:
-Where a fact goes when it leaves the index: still searchable, never rendered into a turn.
+The facts a scope holds that the index did not have room for: still searchable, never rendered into a turn.
+A set rather than a place, since a fact crowded out today returns on its own once the facts ahead of it are retracted.
 _Avoid_: cold storage, trash, attic
 
 **Quarantine**:
