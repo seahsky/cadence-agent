@@ -106,6 +106,11 @@ Hermes has exactly that hook and only its external providers use it, firing its 
 **The brief pass cannot wait for a boundary**, because surviving the boundary is its whole purpose.
 Its input is small: the current brief and the turns since it was last written.
 
+> **Amended by [ADR 0006](0006-model-routing.md).**
+> The nightly sweep's input is **scopes touched since the last successful sweep**, not scopes touched that day.
+> "That day" assumes the sweep always runs, and under a contended five-hour window it may itself be refused.
+> The watermark is what makes ADR 0006's drop-with-no-queue safe: a refused pass is dropped rather than queued, because the sweep is guaranteed to pick it up.
+
 **The staleness sweep uses no model.**
 Every other path to changing memory routes through a model decision, which is the measurably fragile step, so the one producer that cannot forget or hallucinate is worth having.
 
@@ -226,12 +231,23 @@ Deriving it fixes both reference bugs at once.
 Pi's trigger at `window - 16,384` and its 20,000-token verbatim tail sum to 36,384, so on any smaller window compaction can never usefully fire and the session silently proceeds over budget.
 Hermes's flat 50% strands 460K tokens of a 1M context that was already paid for, which is live for cadence specifically.
 
+> **Amended by [ADR 0006](0006-model-routing.md).**
+> The threshold is evaluated **after the reply is sent**, never while assembling a live turn.
+> Crossing 70% on turn N sends the reply, then forms the boundary before turn N+1 assembles, which is what keeps the digest off the blocking path behind a semaphore of 1.
+> The remaining 30% is the budget that pays for the deferral.
+> A turn that overshoots anyway runs the deterministic prune alone and proceeds without a digest.
+
 ## Degradation order, as an input to routing
 
 When the five-hour window is tight, passes drop in this order: playbook proposals, then the nightly sweep, then the brief pass, and reconcile-at-boundary last, because it is the only pass tied to information about to be irreversibly lost.
 
 This ADR says what each pass is worth.
 `#8` sets the budget, once `#15` produces a number for what a pass actually consumes.
+
+> **Settled by [ADR 0006](0006-model-routing.md).**
+> The order becomes a graded utilization ladder rather than a single cliff: playbooks at 60%, nightly sweep at 70%, brief at 80%, reconcile at 90%.
+> It survives `#20`'s finding that this ADR's cost intuition was inverted, because shedding the brief pass at 80% sheds both the third-least-valuable pass and the most expensive one.
+> Value order and cost order agree, so nothing reorders.
 
 ## What this does not solve
 

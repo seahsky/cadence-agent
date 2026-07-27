@@ -127,6 +127,11 @@ A source of model completions cadence can send a turn to.
 A hosted API and a local subprocess are both providers; neither owns a loop, tools, or any conversation state.
 _Avoid_: model, backend, engine, LLM
 
+**Job**:
+A named kind of model work, fixed when the code is written, which decides the provider and model every turn of that kind runs on.
+The memory passes are jobs, and so is the reply loop; nothing chooses its provider at runtime.
+_Avoid_: task, work item, workload
+
 **Turn**:
 One request to a provider and the stream of events it produces.
 Distinct from an entry, which is what a turn is recorded as once it is done.
