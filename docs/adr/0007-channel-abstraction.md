@@ -222,11 +222,17 @@ All three arrive as narrow function-shaped ports, injected at a composition root
 ```ts
 type EntryIds  = {
   toEntry(native: NativeId): Promise<EntryId | null>
+  toNative(entry: EntryId): Promise<NativeId[]>
   bind(entry: EntryId, native: NativeId[]): Promise<void>
 }
 type EditJudge = (before: string, after: string) => Promise<"material" | "cosmetic">
 type Notify    = (notice: Notice) => Promise<void>
 ```
+
+> **Amended while building the seam ([#24](https://github.com/seahsky/cadence-agent/issues/24)).**
+> `toNative` was missing.
+> Both `branch(from: EntryId, …)` and replying to an entry take an `EntryId` and have to find the native message behind it, and no other port could answer that: an adapter forbidden from importing storage cannot look the row up, and reversing `toEntry` is not possible from a one-way function.
+> It is the same table read the other way, so the port grows by one member and nothing else moves.
 
 `EntryIds` exists because resolving a fork point is a native-id lookup and a reply writes one entry to many native ids.
 Importing `src/storage` instead would put a database handle in the channel layer and kill ADR 0002's module-private-handle rule.
