@@ -14,7 +14,8 @@ How the model projects onto Discord belongs in `docs/adr/`, not here.
 **Channel**:
 A durable conversational place the agent is reachable in.
 It outlives every session and every branch that occurs in it, and holds exactly one entry tree.
-_Avoid_: room, surface, conversation
+A destination that holds no entry tree, such as the operator surface, is not a channel.
+_Avoid_: room, conversation
 
 **Entry**:
 One turn in a channel, recorded with a parent so that entries form a tree rather than a list.
@@ -32,6 +33,11 @@ _Avoid_: fork, subthread, subtree
 **Fork point**:
 The entry a branch diverges from, and therefore the parent of that branch's first entry.
 _Avoid_: branch point, split, divergence
+
+**Quote**:
+A pointer from an entry to an earlier entry it refers to, carrying no structural meaning.
+Unlike a fork point it changes nothing about the tree, which is what keeps a casual reply from branching it.
+_Avoid_: reply, reference, citation
 
 **Revision**:
 A branch that supersedes an entry rather than continuing from it, created when someone rewrites what they said.
@@ -62,6 +68,42 @@ _Avoid_: summary, recap, compaction
 An account of what happened on a branch, written when it is abandoned and read by other branches.
 Unlike a digest it replaces nothing; it exists so that one path can learn what another path did.
 _Avoid_: thread summary, recap
+
+### Surfaces
+
+**Adapter**:
+The code that connects cadence to one platform, owning its connection and translating that platform's native gestures into the domain and back.
+One per platform, serving every destination on it, which is why it is not itself a channel.
+_Avoid_: client, connector, integration, bot
+
+**Destination**:
+A named place on a platform an adapter can send to.
+A channel is a destination that holds an entry tree; the operator surface is one that does not.
+_Avoid_: target, room, endpoint
+
+**Operator surface**:
+The destination cadence reports its own health to: refused passes, quarantine, staleness transitions, purge confirmations, storage that has stopped accepting writes.
+Never subscribed for inbound, never assembled into context, and holds no entry tree.
+_Avoid_: log channel, admin channel, alerts
+
+**Notice**:
+One structured report on the operator surface, carrying values rather than rendered text so each adapter formats it in its own idiom.
+_Avoid_: alert, log line, message, event
+
+**Command**:
+An owner-invoked instruction recognised before the agent loop sees it, declared by the domain and registered by each adapter in whatever native mechanism it has.
+Distinct from a tool call, which the model makes and which may therefore fire on a misreading of intent.
+_Avoid_: slash command, directive, prefix
+
+**Native id**:
+A platform's own identifier for something cadence has projected into the domain.
+One entry maps to many native ids, because a reply is chunked to fit the platform.
+_Avoid_: message id, snowflake, external id
+
+**Origin**:
+The native identifiers an inbound arrives with: platform, user, trunk channel, guild.
+What a scope is resolved from, and never a scope itself.
+_Avoid_: source, context, metadata
 
 ### Memory
 

@@ -2,9 +2,22 @@
 
 Communication surfaces. Discord first; Slack, Telegram and CLI later.
 
-Empty on purpose.
-The interface a channel must implement is an open decision — see [issue #12](https://github.com/seahsky/cadence-agent/issues/12), which is blocked on the Discord constraints research ([#4](https://github.com/seahsky/cadence-agent/issues/4)) and the session-boundary decision ([#9](https://github.com/seahsky/cadence-agent/issues/9)).
+The interface is decided: [ADR 0007](../../docs/adr/0007-channel-abstraction.md).
 
-Writing the interface before those close would mean guessing at it, and a channel abstraction guessed from one channel is the thing most likely to need a rewrite when the second arrives.
+An adapter is **not a transport**.
+It owns the projection onto the entry tree, so nothing above it knows what a thread is, and it owns rendering, so nothing above it knows which markdown dialect a platform speaks.
 
-What lands here eventually: the normalised inbound-message shape, the outbound send/edit/typing surface, per-channel capability declarations, and the Discord adapter itself.
+```
+channel/            the seam: ChannelAdapter, Inbound, Notice, the three ports
+channel/discord/    the adapter
+channel/slack/      later, and it should touch nothing outside itself
+```
+
+Three rules the code has to keep:
+
+- **No adapter declares capabilities.** Differences are papered over. An operation a platform cannot perform throws rather than silently no-ops, so a model-invoked `branch` on a CLI comes back as a tool error the model can work around.
+- **An adapter imports neither `storage` nor `provider`.** It receives `EntryIds`, `EditJudge` and `Notify` as injected function-shaped ports, which is what keeps a database handle out of the channel layer and the routing policy out of a transport.
+- **`origin.channelId` is the trunk channel id, never the thread id.** It is what a memory scope resolves from, and the adapter is the only thing that knows a thread's trunk.
+
+The operator surface lives here too, as the `notify` field bound to a configured destination.
+It is not a channel: it holds no entry tree, is never subscribed for inbound, and is never assembled into context.
